@@ -1,0 +1,117 @@
+Django QuerySet查询集
+一 概念
+Django的ORM中存在查询集的概念。
+
+查询集，也称查询结果集、QuerySet，表示从数据库中获取的对象集合。
+
+当调用如下过滤器方法时，Django会返回查询集（而不是简单的列表）：
+
+all()：返回所有数据。
+filter()：返回满足条件的数据。
+exclude()：返回满足条件之外的数据。
+order_by()：对结果进行排序。
+对查询集可以再次调用过滤器进行过滤，也就意味着查询集可以含有零个、一个或多个过滤器。过滤器基于所给的参数限制查询的结果。
+
+从SQL的角度讲，查询集与select语句等价，过滤器像where、limit、order by子句。
+
+二 两大特性
+1）惰性执行
+　　创建查询集不会访问数据库，直到调用数据时，才会访问数据库，调用数据的情况包括迭代、序列化、与if合用
+
+　　例如，当执行如下语句时，并未进行数据库查询，只是创建了一个查询集qs
+
+复制代码
+# 查询BookInfo模型类中的所有数据
+qs = BookInfo.objects.all() 
+
+# 继续执行遍历迭代操作后，才真正的进行了数据库的查询
+
+for book in qs:
+    print(book.btitle)
+复制代码
+2）缓存
+　　使用同一个查询集，第一次使用时会发生数据库的查询，然后Django会把结果缓存下来，再次使用这个查询集时会使用缓存的数据，减少了数据库的查询次数。
+
+　　情况一：如下是两个查询集，无法重用缓存，每次查询都会与数据库进行一次交互，增加了数据库的负载。
+
+from booktest.models import BookInfo
+# 每个列表内都为一个独立的查询集，两次查询集之间如果有数据插入，可能数据集会不同
+[book.id for book in BookInfo.objects.all()]
+
+[book.id for book in BookInfo.objects.all()]
+　　情况二：经过存储后，可以重用查询集，第二次使用缓存中的数据。
+
+复制代码
+# 首先获得一个查询集
+qs=BookInfo.objects.all()
+
+# 第一次读取数据，会查询数据库，然后增加缓存
+[book.id for book in qs]
+# 第二次读取数据，直接查询缓存
+[book.id for book in qs]
+复制代码
+3）何时查询集不会被缓存?
+　　查询集不会永远缓存它们的结果。当只对查询集的部分进行求值时会检查缓存， 如果这个部分不在缓存中，那么接下来查询返回的记录都将不会被缓存。所以，这意味着使用切片或索引来限制查询集将不会填充缓存。
+
+　　情况一：重复获取查询集对象中一个特定的索引将每次都查询数据库：
+
+queryset = BookInfo.objects.all()
+
+queryset[5]             # 查询数据库
+queryset[5]             # 再一次查询数据库           
+　　情况二：如果已经对全部查询集求值过，则将检查缓存：　　
+
+# 获取查询集
+queryset = BookInfo.objects.all()
+[entry for entry in queryset]     # 查询数据库
+print queryset[5]                     # 使用缓存  
+print queryset[5]                     # 使用缓存                   
+　　 情况三：下面是一些其它例子，它们会使得全部的查询集被求值并填充到缓存中：
+
+复制代码
+# 获取查询集
+queryset = BookInfo.objects.all()
+[entry for entry in queryset]
+bool(queryset)
+entry in queryset
+list(queryset)
+复制代码
+　　注：简单地打印查询集不会填充缓存。　　
+
+queryResult=models.Article.objects.all()
+print(queryResult) #  查询数据库
+print(queryResult) #  查询数据库　
+三 限制查询集
+　　1）、可以对查询集进行取下标或切片操作，等同于sql中的limit和offset子句。
+注意：不支持负数索引。
+　　对查询集进行切片后返回一个新的查询集，不会立即执行查询。
+
+　　如果获取一个对象，直接使用[0]，等同于[0:1].get()，但是如果没有数据，[0]引发IndexError异常，[0:1].get()如果没有数据引发DoesNotExist异常。
+
+　　示例：获取第1、2项，运行查看。
+
+qs = BookInfo.objects.all()[0:2]
+　　2）、exists()方法：判断某一个查询集中是否有数据：
+　　简单的使用if语句进行判断也会完全执行整个queryset并且把数据放入cache，虽然你并不需要这些 数据！为了避免这个，可以用exists()方法，判断查询集中是否有数据，如果有则返回True，没有则返回False。
+
+if queryResult.exists():
+    #SELECT (1) AS "a" FROM "blog_article" LIMIT 1; args=()
+        print("exists...")
+　　3）、terator()方法: 来获取数据，处理完数据就将其丢弃。
+　　当queryset非常巨大时，cache会成为问题。
+　　处理成千上万的记录时，将它们一次装入内存是很浪费的。更糟糕的是，巨大的queryset可能会锁住系统 进程，让你的程序濒临崩溃。要避免在遍历数据的同时产生queryset cache，可以使用iterator()方法 来获取数据，处理完数据就将其丢弃。
+
+复制代码
+objs = BookInfo.objects.all().iterator()
+# iterator()可以一次只从数据库获取少量数据，这样可以节省内存
+
+for obj in objs:
+    print(obj.title)
+
+#BUT,再次遍历没有打印,因为迭代器已经在上一次遍历(next)到最后一次了,没得遍历了
+for obj in objs:
+    print(obj.title)
+复制代码
+　　注：(1) 使用iterator()方法来防止生成cache，意味着遍历同一个queryset时会重复执行查询。所以使 #用iterator()的时候要当心，确保你的代码在操作一个大的queryset时没有重复执行查询。
+
+　　　　(2) queryset的cache是用于减少程序对数据库的查询，在通常的使用下会保证只有在需要的时候才会查询数据库。 使用exists()和iterator()方法可以优化程序对内存的使用。不过，由于它们并不会生成queryset cache，可能 会造成额外的数据库查询。
