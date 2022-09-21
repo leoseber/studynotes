@@ -1,0 +1,58 @@
+render() 函数
+在讲 render() 函数之前，我们在 Django 项目 index 文件夹的 urls.py 和 views.py 中编写如下功能代码：（不难，望读者细心阅之）。
+
+# index的 urls.py 
+from django.urls import path 
+from . import views  
+
+urlpatterns = [     
+    # 定义首页的路由     
+    path(' ', views.index, name='index'), 
+]
+
+
+# index的views.py 
+from django.http import HttpResponse 
+
+def index(request):     
+     html = '<h1> Hello World </h1>' 
+     return HttpResponse(html, status=200)
+
+视图函数 index 使用响应类 HttpResponse 实现响应过程。从 HttpResponse 的参数可知，第一个参数是响应内容，一般是网页内容或 JSON 数据，网页内容是以HTML语言为主的，JSON数据用于生成API接口数据。第二个参数用于设置HTTP状态码，它支持HTTP所有的状态码。
+
+从源码角度分析，打开响应类 HttpResponse 的源码文件，发现 Django内置的响应类（本人在上篇文章中已讲过）都是在 HttpResponse 的基础上实现的，只不过它们的HTTP状态码有所不同，如图下所示。
+
+从 HttpResponse 的使用过程可知，如果要生成网页内容，就需要将 HTML 语言以 字符串的形式表示，如果网页内容过大，就会增加视图函数的代码量，同时也没有体现模板的作用，因此Django在此基础上进行了封装处理，定义了函数 render 和 redirect。
+
+render()语法如下：
+
+render(request, template_name, context=None, content_type=None, status=None, using=None)
+render 的参数 request 和 template name 是必需参数，其余的参数是可选参数。各个参数说明如下。
+
+request：浏览器向服务器发送的请求对象，包含用户信息、请求内容和请求方式等。
+template_name：设重模板文件名，用于生成网页内容。
+context：对模板上下文（模板变量）赋值，以字典格式表示，默认情况下是一个空字典。
+content_type：响应内容的数据格式，一般情况下使用默认值即可。
+status：HTTP状态码，默认为200。
+using：设置模板引擎，用于解析模板文件，生成网页内容。
+为了更好地说明 render 的使用方法，我们通过简单的例子来加以说明。在Django项目的index文件中的 views.py 和 templates 的 index.html 中编写以下代码：
+
+# index的 views.py 
+from django.shortcuts import render 
+
+def index(request):     
+    value = {'title': 'Hello Django'}     
+    return render(request, 'index.html', context=value)
+
+
+# templates 的 index.html 
+<!DOCTYPE html> 
+<html> 　　
+    <body> 　　　　
+          <h3> {{ title }} </h3> 　　
+    </body> 
+</html>
+视图函数 index 定义的变量 value 作为 render 的参数 context，而模板 index.html 里通过使用模板上下文（模板变量）{{ title }} 来获取变量 value 的数据，上下文的命名必须与变量 value 的数据命名（字典的key）相同，这样 Django 内置的模板引擎才能将参数context（变量value）的数据与模板上下文进行配对，从而将参数 context 的数据转换成网页内容。运行Django项目，在浏览器上访问127.0.0.1：8000即可看到网页信息。
+
+
+希望以上内容能够帮助到各位！
