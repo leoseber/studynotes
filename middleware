@@ -1,0 +1,149 @@
+一、什么是Django中间件
+　　Django 中间件是用来处理Django的请求request和响应response的框架级别的钩子，它是一个轻量，低级别的插件系统，用于全局范围内改变Django的输入，输出。每个中间件组件都负责做一些特定的功能。
+
+说的直白一点是中间件就是帮我们程序员在视图函数执行之前和执行之后都可以一些额外的操作，它是一个自定义的类，类中定义了几个方法，Django框架会在请求的特定时间去执行这些方法。
+
+二、Django中间件的定义规则
+　　1、 自定义中间件的规则
+　　　　（1）要继承MIDDLEWAREMIXIN类　　　　
+from django.utils.deprecation import MiddlewareMixin
+　　　　（2）要重写父类方法　
+　　　　　　父类的五个方法（主要process_request   process_response)
+　　　　　　（1）process_request(self，request)　　　　　　　　　　　　　　　　
+
+　　　　　　　　*主要方法。请求刚进来时，执行视图函数之前调用。(无return)
+
+           　　　　 1.中间件的process_request方法是在执行视图函数之前执行的
+
+           　　　　 2.当配置中间件时，会按照MIDDLEWARE的注册顺序，也就是列表的索引值，从前到后依次执行的。
+
+          　　　　  3.不同中间件之间传递的request都是同一个对象。
+
+　　　　　　（2）process_view(self,request,view_func,view_args,view_kwargs)　　
+
+　　　　　　　　 *URL路由匹配成功后，执行视图函数之前调用，拿到视图函数对象，及其所有参数。(无return)　　　　　　　
+
+复制代码
+'''
+process_view(self, request, view_func, view_args, view_kwargs)
+
+request是HttpRequest对象。
+view_func是Django即将使用的视图函数。 （它是实际的函数对象，而不是函数的名称作为字符串。）
+view_args是将传递给视图的位置参数的列表.
+view_kwargs是将传递给视图的关键字参数的字典。 view_args和view_kwargs都不包含第一个视图参数（request）。
+'''
+复制代码
+　　　　　　（3）process_template_response(self,request,response)　　　　　　　
+
+　　　　　　　　 *很少用。执行了render()渲染方法后调用。(有return)
+
+　　　　　　（4）process_exception(self,request,exception)　　　　　　　　　　　
+
+　　　　　　　　执行视图函数中遇到异常时调用。(无return)
+
+　　　　　　　　*该方法有两个参数：
+
+　　　　　　　　一个是httpresponse对象
+
+　　　　　　　　一个是视图函数产生的exception对象
+
+　　　　　　　　这个函数只有在视图函数抛出异常才可以执行，它返回none或者httpresponse对象，如果是httpresponse对象，django将调用模板和中间件中的process_reponse方法，并将返回给浏览器，否则默认处理异常，如果返回none，则交给下一个中间件的process_exception方法来处理执行，它的执行顺序也是按照中间件注册顺序的倒序执行。
+
+　　　　　　（5）process_response(self,request,response) 　　　　　　　　　　　 
+
+　　　　　　　　主要方法。执行视图函数结束之后有响应时调用。(有return)
+
+　　　　返回值可以是一个NONE，或者HttpResponse对象，如果是none，继续按照django定义的向下执行，交给下个中间件处理，如果返回是Httpresponse对象，django将不执行视图函数，则直接将该对象返回给用户。
+
+　　　　（3）将自定义中间件类添加到setting.py文件中的MIDDLEWARE配置项里　　
+　　　　setting.py
+
+复制代码
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+　　
+    # 自定义 在对应app内创建一个 my_middleware.py文件，然后定义类名为Middleware的中间件
+    'app.my_middleware.Middleware',
+]
+
+# 白名单路径，不需要做登陆就能访问的页面
+WHITE_LIST = ['/login/', '/logout/']
+复制代码
+　　MIDDLEWARE是一个列表，列表中是一个个字符串，这些字符串其实是类，也就是中间件。
+
+三、代码实现
+　　　　my_middleware.py
+
+复制代码
+from django.utils.deprecation import MiddlewareMixin  # 导入中间间模块
+from django.shortcuts import redirect  # 返回页面模块
+from middlewareDemo import settings  # 导入白名单
+
+
+class Middleware(MiddlewareMixin):  # 认证中间件
+
+    def process_request(self, request):
+        """
+        请求来之前判断是否已经登录
+        :param request:
+        :return:
+        """
+        white_list = settings.WHITE_LIST
+
+        if request.path in white_list:
+            return None  # 如果是白名单的路径，直接跳过
+        if not request.user.is_authenticated:  # 获取用户是否登陆
+            return redirect('/login/')
+    
+    def process_response(self, request, response):
+        """
+        不管是何执行结果，都会返回相应的HttpResonse对象
+        :param request:
+        :param response:
+        :return:
+        """
+        print('m1.process_response')
+        return response
+
+    def process_exception(self, request, exception):
+        """
+        出现异常才会被调用进行异常处理
+        :param request:
+        :param exception:
+        :return:
+        """
+        print('m1.process_exception')
+复制代码
+四、中间件的使用场景
+　　1.做IP限制
+　　放在中间件类的列表中，阻止某些ip访问；
+
+　　2.URL访问过滤
+　　如果用户访问的是logo视图（放过）
+
+　　如果访问其他视图，需要检测是否已经有session，已经有了放行，如果没有返回login，这样就省的在多个视图函数上写装饰器了！
+
+　　3.缓存
+　　客户端请求来了，中间件去缓存看看有没有数据，有直接返回给用户，没有再去逻辑层执行视图函数
+
+　　4、CSRF
+　　Django项目中默认启用了csrf保护,每次请求时通过CSRF中间件检查请求中是否有正确token值
+
+五、Django中间件与装饰器的区别
+　　1、Django 中间件：在视图函数执行之前先去进行处理，在视图函数执行之后再去进行收尾工作。不会区分是哪个视图，所有的视图统统一视同仁，都会执行之前进行处理或请求之后进行处理。
+　　在Django创建的时候，Django默认会给我们加6个中间件。“比如session和csrf,在视图函数执行前，我们就需要对它进行处理，可以使用装饰器来做，也可以使用中间件来处理。”
+
+
+　　2、装饰器：主要是作用域问题。如果给视图函数上面添加装饰器，它能够保证这个视图的方法在执行之前或执行之后被执行。但是它仅仅适用于哪些视图添加装饰器，那些视图会有这些作用。
+
+　　如果是做一个普遍的处理，不去区分视图的话，就用middleware避免编写重复功能的代码，本质上就是一个自定义类，类中定义了几个方法，Django框架会在请求的特定的时间去执行这些方法。
+
+　　可以用于登录时的黑名单验证。
+
+　　如果需要对特殊视图进行处理，可以使用装饰器。
