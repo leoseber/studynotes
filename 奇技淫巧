@@ -1,0 +1,49 @@
+1.条件筛选——列表、字典、集合
+      [x for x in data if x >= 0] 列表解析
+      filter(lambda x: X >= 0 data) # timeit filter(lambda x: X >= 0 data)
+
+      {k: v for k, v in d.iteritems() if v > 50} 字典解析
+
+      {x for x in s if x % 3 == 0} 集合解析
+
+2.为元组的元素命名，提高可读性
+      from collections import nametuple
+      nametuple("Student", ["name","age","sex","email"])
+      
+3.序列中元素的出现频度
+      Counter.common(3) #前三
+
+4.排序 sorted
+        dict.items()
+        sorted(d.items(), key=lambda x: x[1])
+        
+5.保持字典有序
+        from collections import OrderedDict
+
+6.可迭代对象和迭代器对象
+        from collections import Iterable, Iterator
+        
+        class WeatherIterator(Iterator):
+          def __init__(self,cities)
+            self.cities = cities
+            self.index= 0
+            
+          def getWeather(self,city):
+            r = requests.get()
+            data = r.json()['data']['forecast'][0]
+            
+            retun '%s: %s， %s' % (city, data['low', data['high'])
+            
+          def next(self):
+            if self.index == len(self.cities):
+               raise StopIteration
+               
+            city = self.cities[self.index]
+            self.index += 1
+            return self.getWeather(city)
+         
+        class WeatherIterable(Iterable):
+          def __init__(self,cities):
+            self.cities = cities
+          def __iter__(self)
+            return WeatherIterator(self.cities)
